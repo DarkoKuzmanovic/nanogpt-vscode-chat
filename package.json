@@ -1,0 +1,118 @@
+{
+  "name": "nanogpt-vscode-chat",
+  "displayName": "NanoGPT Provider for GitHub Copilot Chat",
+  "description": "An extension that integrates NanoGPT models into GitHub Copilot Chat",
+  "version": "0.1.1",
+  "publisher": "quzma",
+  "author": {
+    "name": "Darko Kuzmanovic",
+    "url": "https://marketplace.visualstudio.com/publishers/quzma"
+  },
+  "icon": "icon.png",
+  "engines": {
+    "vscode": "^1.104.0"
+  },
+  "categories": [
+    "AI",
+    "Chat"
+  ],
+  "keywords": [
+    "ai",
+    "copilot",
+    "chat",
+    "nanogpt",
+    "llm",
+    "gpt",
+    "claude",
+    "gemini"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languageModelChatProviders": [
+      {
+        "vendor": "nanogpt",
+        "displayName": "NanoGPT",
+        "managementCommand": "nanogpt.manage"
+      }
+    ],
+    "commands": [
+      {
+        "command": "nanogpt.manage",
+        "title": "NanoGPT: Manage Models & API Key"
+      },
+      {
+        "command": "nanogpt.setApiKey",
+        "title": "NanoGPT: Set API Key"
+      },
+      {
+        "command": "nanogpt.selectModels",
+        "title": "NanoGPT: Select Models"
+      },
+      {
+        "command": "nanogpt.refreshModels",
+        "title": "NanoGPT: Refresh Available Models"
+      },
+      {
+        "command": "nanogpt.enableSubscriptionModels",
+        "title": "NanoGPT: Enable All Subscription Models"
+      }
+    ],
+    "configuration": {
+      "title": "NanoGPT",
+      "properties": {
+        "nanogpt.apiKey": {
+          "type": "string",
+          "default": "",
+          "description": "Your NanoGPT API key"
+        },
+        "nanogpt.selectedModels": {
+          "type": "array",
+          "default": [
+            "z-ai/glm-4.6",
+            "MiniMax-M2",
+            "deepseek/deepseek-v3.2-speciale",
+            "moonshotai/kimi-k2-thinking"
+          ],
+          "description": "List of model IDs to make available in Copilot Chat"
+        },
+        "nanogpt.baseUrl": {
+          "type": "string",
+          "default": "https://nano-gpt.com/api/v1",
+          "description": "NanoGPT API base URL"
+        },
+        "nanogpt.autoFetchModels": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically fetch available models from NanoGPT on startup"
+        },
+        "nanogpt.showSubscriptionModelsFirst": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show subscription models at the top of the model list"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "lint": "eslint src --ext ts",
+    "format": "prettier --write \"src/**/*.ts\""
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/vscode": "^1.104.0",
+    "@typescript-eslint/eslint-plugin": "^6.13.0",
+    "@typescript-eslint/parser": "^6.13.0",
+    "eslint": "^8.54.0",
+    "prettier": "^3.1.0",
+    "typescript": "^5.3.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-username/nanogpt-vscode-chat"
+  },
+  "license": "MIT"
+}
