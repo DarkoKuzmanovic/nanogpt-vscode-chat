@@ -5,6 +5,20 @@ All notable changes to the NanoGPT Provider for GitHub Copilot Chat extension wi
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2026-01-31
+
+### Fixed
+
+- Fixed API key configuration confusion - clarified that API key is stored in Secret Storage via "NanoGPT: Set API Key" command
+- Fixed model sorting toggle behavior to properly sort subscription models
+- Improved error handling in "NanoGPT: Select Models" command
+
+### Changed
+
+- Updated documentation to clarify API key storage and configuration method
+- Fixed repository URL in package.json
+- Normalized LICENSE copyright years
+
 ## [0.1.1] - 2025-12-07
 
 ### Fixed

@@ -41,7 +41,7 @@ Access DeepSeek V3.2, GLM 4.6, MiniMax M2, Kimi K2, Qwen 3 and hundreds more - a
 
 | Setting                               | Description                                     | Default                                                                                            |
 | ------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `nanogpt.apiKey`                      | Your NanoGPT API key (stored securely)          | -                                                                                                  |
+| `nanogpt.apiKey`                      | ⚠️ **Deprecated** - Use "NanoGPT: Set API Key" command instead. API key is now stored securely in VS Code Secret Storage. | -                                                                                                  |
 | `nanogpt.selectedModels`              | List of model IDs to show in Copilot Chat       | `["z-ai/glm-4.6", "MiniMax-M2", "deepseek/deepseek-v3.2-speciale", "moonshotai/kimi-k2-thinking"]` |
 | `nanogpt.baseUrl`                     | API base URL                                    | `https://nano-gpt.com/api/v1`                                                                      |
 | `nanogpt.autoFetchModels`             | Automatically fetch available models on startup | `true`                                                                                             |
