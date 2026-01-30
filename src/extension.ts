@@ -2,16 +2,30 @@ import * as vscode from "vscode";
 import { NanoGPTChatModelProvider } from "./provider";
 
 let provider: NanoGPTChatModelProvider | undefined;
+let outputChannel: vscode.OutputChannel;
 
 export function activate(context: vscode.ExtensionContext) {
   console.log("NanoGPT extension is now active!");
 
+  // Create the output channel for diagnostics
+  outputChannel = vscode.window.createOutputChannel("NanoGPT");
+  context.subscriptions.push(outputChannel);
+
   // Create the provider
-  provider = new NanoGPTChatModelProvider(context);
+  provider = new NanoGPTChatModelProvider(context, outputChannel);
 
   // Register the language model chat provider
   const providerDisposable = vscode.lm.registerLanguageModelChatProvider("nanogpt", provider);
   context.subscriptions.push(providerDisposable);
+
+  // Auto-fetch models on startup if enabled
+  const config = vscode.workspace.getConfiguration("nanogpt");
+  if (config.get<boolean>("autoFetchModels", true)) {
+    // Fire-and-forget, non-blocking startup fetch
+    provider.fetchAvailableModels().catch(() => {
+      // Silent fail on startup - user will see defaults until manual refresh
+    });
+  }
 
   // Register commands
   context.subscriptions.push(
@@ -102,7 +116,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
 
       try {
-        vscode.window.withProgress(
+        await vscode.window.withProgress(
           {
             location: vscode.ProgressLocation.Notification,
             title: "Fetching NanoGPT models...",
@@ -169,7 +183,23 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand("nanogpt.refreshModels", async () => {
       provider?.clearCache();
-      vscode.window.showInformationMessage("NanoGPT model cache cleared!");
+      try {
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: "Refreshing NanoGPT models...",
+            cancellable: false,
+          },
+          async () => {
+            const models = await provider?.fetchAvailableModels();
+            vscode.window.showInformationMessage(`NanoGPT: Found ${models?.length || 0} models`);
+          },
+        );
+      } catch (error) {
+        vscode.window.showErrorMessage(
+          `Failed to refresh models: ${error instanceof Error ? error.message : "Unknown error"}`,
+        );
+      }
     }),
   );
 
@@ -209,6 +239,18 @@ export function activate(context: vscode.ExtensionContext) {
             }
 
             const config = vscode.workspace.getConfiguration("nanogpt");
+            const currentCount = config.get<string[]>("selectedModels", []).length;
+
+            const confirm = await vscode.window.showWarningMessage(
+              `This will replace your ${currentCount} currently selected model(s) with ${subscriptionModels.length} subscription models. Continue?`,
+              { modal: true },
+              "Replace",
+            );
+
+            if (confirm !== "Replace") {
+              return;
+            }
+
             const subscriptionIds = subscriptionModels.map((m) => m.id);
 
             await config.update("selectedModels", subscriptionIds, vscode.ConfigurationTarget.Global);

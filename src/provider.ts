@@ -183,14 +183,17 @@ const DEFAULT_MODELS: NanoGPTModel[] = [
 
 export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvider {
   private context: vscode.ExtensionContext;
+  private outputChannel: vscode.OutputChannel;
   private cachedModels: NanoGPTModel[] | undefined;
   private modelCache: Map<string, vscode.LanguageModelChatInformation> = new Map();
   private lastFetch: number = 0;
   private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
   private migrationShown: boolean = false;
+  private modelsFetchPromise?: Promise<NanoGPTModel[]>;
 
-  constructor(context: vscode.ExtensionContext) {
+  constructor(context: vscode.ExtensionContext, outputChannel: vscode.OutputChannel) {
     this.context = context;
+    this.outputChannel = outputChannel;
   }
 
   /**
@@ -241,6 +244,11 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
       return this.cachedModels;
     }
 
+    // In-flight de-duplication: if a fetch is already in progress, return that promise
+    if (this.modelsFetchPromise) {
+      return this.modelsFetchPromise;
+    }
+
     const apiKey = await this.getApiKey();
     const config = vscode.workspace.getConfiguration("nanogpt");
     const baseUrl = config.get<string>("baseUrl", "https://nano-gpt.com/api/v1");
@@ -250,34 +258,52 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
       return DEFAULT_MODELS;
     }
 
-    try {
-      // Fetch subscription model IDs first to mark them
-      const subscriptionModelIds = await this.fetchSubscriptionModelIds(apiKey);
+    // Create and store the fetch promise
+    this.modelsFetchPromise = (async () => {
+      try {
+        // Fetch subscription model IDs first to mark them
+        const subscriptionModelIds = await this.fetchSubscriptionModelIds(apiKey);
 
-      // Fetch all models with detailed info
-      const allModels = await this.fetchStandardModels(apiKey, baseUrl);
+        // Fetch all models with detailed info
+        const allModels = await this.fetchStandardModels(apiKey, baseUrl);
 
-      // Mark subscription models
-      for (const model of allModels) {
-        if (subscriptionModelIds.has(model.id)) {
-          model.isSubscription = true;
+        // Mark subscription models
+        for (const model of allModels) {
+          if (subscriptionModelIds.has(model.id)) {
+            model.isSubscription = true;
+          }
         }
+
+        // Respect the showSubscriptionModelsFirst setting for sorting
+        const showSubscriptionFirst = config.get<boolean>("showSubscriptionModelsFirst", true);
+
+        if (showSubscriptionFirst) {
+          // Sort subscription first, then by name
+          allModels.sort((a, b) => {
+            if (a.isSubscription && !b.isSubscription) return -1;
+            if (!a.isSubscription && b.isSubscription) return 1;
+            return a.name.localeCompare(b.name);
+          });
+        } else {
+          // Just sort alphabetically by name
+          allModels.sort((a, b) => a.name.localeCompare(b.name));
+        }
+
+        this.cachedModels = allModels.length > 0 ? allModels : DEFAULT_MODELS;
+        this.lastFetch = Date.now();
+        return this.cachedModels;
+      } catch (error) {
+        this.outputChannel.appendLine(
+          `[Error] Error fetching models: ${error instanceof Error ? error.message : String(error)}`,
+        );
+        return DEFAULT_MODELS;
+      } finally {
+        // Clear the in-flight promise after completion
+        this.modelsFetchPromise = undefined;
       }
+    })();
 
-      // Sort models: subscription first, then by name
-      allModels.sort((a, b) => {
-        if (a.isSubscription && !b.isSubscription) return -1;
-        if (!a.isSubscription && b.isSubscription) return 1;
-        return a.name.localeCompare(b.name);
-      });
-
-      this.cachedModels = allModels.length > 0 ? allModels : DEFAULT_MODELS;
-      this.lastFetch = Date.now();
-      return this.cachedModels;
-    } catch (error) {
-      console.error("Error fetching models:", error);
-      return DEFAULT_MODELS;
-    }
+    return this.modelsFetchPromise;
   }
 
   private async fetchSubscriptionModelIds(apiKey: string): Promise<Set<string>> {
@@ -293,7 +319,7 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
       });
 
       if (!response.ok) {
-        console.log("Subscription models endpoint not available:", response.status);
+        this.outputChannel.appendLine(`[Info] Subscription models endpoint not available: ${response.status}`);
         return new Set();
       }
 
@@ -305,7 +331,9 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
 
       return new Set(data.data.map((m) => m.id));
     } catch (error) {
-      console.error("Error fetching subscription models:", error);
+      this.outputChannel.appendLine(
+        `[Error] Error fetching subscription models: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return new Set();
     }
   }
@@ -322,7 +350,7 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
       });
 
       if (!response.ok) {
-        console.error("Failed to fetch models:", response.statusText);
+        this.outputChannel.appendLine(`[Error] Failed to fetch models: ${response.statusText}`);
         return [];
       }
 
@@ -372,7 +400,9 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
           },
         }));
     } catch (error) {
-      console.error("Error fetching standard models:", error);
+      this.outputChannel.appendLine(
+        `[Error] Error fetching standard models: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return [];
     }
   }
@@ -449,8 +479,9 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
         maxOutputTokens: model.maxOutputTokens || 16384,
         capabilities: {
           imageInput: model.capabilities?.vision || false,
-          toolCalling: model.capabilities?.tools || true,
+          toolCalling: model.capabilities?.tools ?? true,
         },
+        detail: this.formatModelDetail(model),
       };
       this.modelCache.set(model.id, info);
       return info;
@@ -498,7 +529,15 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
     }
 
     const controller = new AbortController();
-    token.onCancellationRequested(() => controller.abort());
+    const timeout = 120000; // 120 seconds
+    const timeoutId = setTimeout(() => {
+      controller.abort();
+    }, timeout);
+
+    token.onCancellationRequested(() => {
+      clearTimeout(timeoutId);
+      controller.abort();
+    });
 
     try {
       const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -514,7 +553,21 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`NanoGPT API error: ${response.status} - ${errorText}`);
+        let errorMessage = `NanoGPT API error (${response.status})`;
+
+        try {
+          const errorJson = JSON.parse(errorText);
+          if (errorJson.error?.message) {
+            errorMessage += `: ${errorJson.error.message}`;
+          } else {
+            errorMessage += `: ${errorText}`;
+          }
+        } catch {
+          errorMessage += `: ${errorText}`;
+        }
+
+        this.outputChannel.appendLine(`[Error] ${errorMessage}`);
+        throw new Error(errorMessage);
       }
 
       if (!response.body) {
@@ -591,19 +644,37 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
                   }
                 }
               }
-            } catch {
-              // Ignore JSON parse errors for incomplete chunks
+            } catch (parseError) {
+              // Only log if it looks like it should have been valid JSON
+              if (data.startsWith("{") || data.startsWith("[")) {
+                this.outputChannel.appendLine(`[Warning] Failed to parse SSE chunk: ${data.substring(0, 100)}`);
+              }
+              // Otherwise ignore (likely incomplete fragment)
             }
           }
         }
       }
     } catch (error) {
+      clearTimeout(timeoutId);
+
       if (error instanceof Error && error.name === "AbortError") {
-        return; // Request was cancelled
+        if (token.isCancellationRequested) {
+          return; // User cancelled
+        }
+        throw new Error("Request timed out after 120 seconds. The model may be overloaded.");
       }
-      // Re-throw as a clean Error to avoid serialization issues with complex error objects
-      // (some errors have non-serializable properties like cause, stack traces, etc.)
+
       const message = error instanceof Error ? error.message : String(error);
+
+      // Provide actionable guidance based on error type
+      if (message.includes("401") || message.includes("Unauthorized")) {
+        throw new Error("Invalid API key. Please run 'NanoGPT: Set API Key' to configure your key.");
+      } else if (message.includes("429") || message.includes("rate limit")) {
+        throw new Error("Rate limit exceeded. Please wait a moment and try again.");
+      } else if (message.includes("403") || message.includes("Forbidden")) {
+        throw new Error("Access forbidden. Your API key may not have access to this model.");
+      }
+
       throw new Error(message);
     }
   }
@@ -632,6 +703,7 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
       role: string;
       content: string | Array<{ type: string; text?: string; image_url?: { url: string } }>;
       name?: string;
+      tool_calls?: unknown[];
       tool_call_id?: string;
     } = {
       role,
@@ -642,18 +714,62 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
       result.name = msg.name;
     }
 
+    // Handle tool calls in message content
+    const toolCalls: Array<{
+      id: string;
+      type: string;
+      function: { name: string; arguments: string };
+    }> = [];
+
+    for (const part of msg.content) {
+      if (part instanceof vscode.LanguageModelToolCallPart) {
+        toolCalls.push({
+          id: part.callId,
+          type: "function",
+          function: {
+            name: part.name,
+            arguments: JSON.stringify(part.input),
+          },
+        });
+      }
+    }
+
+    if (toolCalls.length > 0) {
+      result.tool_calls = toolCalls;
+    }
+
+    // Handle tool result messages
+    for (const part of msg.content) {
+      if (part instanceof vscode.LanguageModelToolResultPart) {
+        result.tool_call_id = part.callId;
+        break; // Only one tool_call_id per message
+      }
+    }
+
     return result;
   }
 
   private convertRole(role: vscode.LanguageModelChatMessageRole): string {
-    switch (role) {
-      case vscode.LanguageModelChatMessageRole.User:
-        return "user";
-      case vscode.LanguageModelChatMessageRole.Assistant:
-        return "assistant";
-      default:
-        return "user";
+    // Handle existing enum values
+    if (role === vscode.LanguageModelChatMessageRole.User) {
+      return "user";
     }
+    if (role === vscode.LanguageModelChatMessageRole.Assistant) {
+      return "assistant";
+    }
+
+    // Handle potential future role types by checking role value directly
+    // In case System or Tool roles are added to the API in the future
+    const roleValue = String(role);
+    if (roleValue === "System" || roleValue === "system") {
+      return "system";
+    }
+    if (roleValue === "Tool" || roleValue === "tool") {
+      return "tool";
+    }
+
+    // Default to user for unknown roles
+    return "user";
   }
 
   private convertContent(
@@ -708,5 +824,30 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
         return "";
       })
       .join("");
+  }
+
+  private formatModelDetail(model: NanoGPTModel): string {
+    const parts: string[] = [];
+
+    if (model.isSubscription) {
+      parts.push("⭐ Subscription");
+    }
+
+    if (model.maxInputTokens) {
+      parts.push(`${Math.round(model.maxInputTokens / 1000)}K context`);
+    }
+
+    const features: string[] = [];
+    if (model.capabilities?.vision) {
+      features.push("🖼️ Vision");
+    }
+    if (model.capabilities?.tools) {
+      features.push("🔧 Tools");
+    }
+    if (features.length > 0) {
+      parts.push(features.join(" "));
+    }
+
+    return parts.join(" | ");
   }
 }
