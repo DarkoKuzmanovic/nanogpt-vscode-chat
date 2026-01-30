@@ -46,6 +46,10 @@
         "title": "NanoGPT: Set API Key"
       },
       {
+        "command": "nanogpt.clearApiKey",
+        "title": "NanoGPT: Clear API Key"
+      },
+      {
         "command": "nanogpt.selectModels",
         "title": "NanoGPT: Select Models"
       },
@@ -64,7 +68,7 @@
         "nanogpt.apiKey": {
           "type": "string",
           "default": "",
-          "description": "Your NanoGPT API key"
+          "description": "⚠️ DEPRECATED: This setting is insecure and will be automatically migrated to Secret Storage. Use 'NanoGPT: Set API Key' command instead."
         },
         "nanogpt.selectedModels": {
           "type": "array",

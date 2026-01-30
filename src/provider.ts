@@ -187,9 +187,46 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
   private modelCache: Map<string, vscode.LanguageModelChatInformation> = new Map();
   private lastFetch: number = 0;
   private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+  private migrationShown: boolean = false;
 
   constructor(context: vscode.ExtensionContext) {
     this.context = context;
+  }
+
+  /**
+   * Get the API key from Secret Storage, with fallback to settings and automatic migration.
+   * Secret Storage is the source of truth.
+   */
+  public async getApiKey(): Promise<string | undefined> {
+    // First check Secret Storage (source of truth)
+    let apiKey = await this.context.secrets.get("nanogpt.apiKey");
+
+    if (apiKey) {
+      return apiKey;
+    }
+
+    // Fallback to settings for backward compatibility
+    const config = vscode.workspace.getConfiguration("nanogpt");
+    const settingsApiKey = config.get<string>("apiKey");
+
+    if (settingsApiKey) {
+      // Migrate to Secret Storage
+      await this.context.secrets.store("nanogpt.apiKey", settingsApiKey);
+      // Clear the setting
+      await config.update("apiKey", undefined, vscode.ConfigurationTarget.Global);
+
+      // Show migration message once
+      if (!this.migrationShown) {
+        this.migrationShown = true;
+        vscode.window.showInformationMessage(
+          "NanoGPT: API key has been migrated to Secure Storage for better security."
+        );
+      }
+
+      return settingsApiKey;
+    }
+
+    return undefined;
   }
 
   clearCache(): void {
@@ -204,7 +241,7 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
       return this.cachedModels;
     }
 
-    const apiKey = await this.context.secrets.get("nanogpt.apiKey");
+    const apiKey = await this.getApiKey();
     const config = vscode.workspace.getConfiguration("nanogpt");
     const baseUrl = config.get<string>("baseUrl", "https://nano-gpt.com/api/v1");
 
@@ -370,7 +407,7 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
     options: { silent: boolean },
     _token: vscode.CancellationToken
   ): Promise<vscode.LanguageModelChatInformation[]> {
-    const apiKey = await this.context.secrets.get("nanogpt.apiKey");
+    const apiKey = await this.getApiKey();
 
     if (!apiKey) {
       if (!options.silent) {
@@ -427,7 +464,7 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
     token: vscode.CancellationToken
   ): Promise<void> {
-    const apiKey = await this.context.secrets.get("nanogpt.apiKey");
+    const apiKey = await this.getApiKey();
     if (!apiKey) {
       throw new Error("NanoGPT API key not configured");
     }

@@ -22,6 +22,7 @@ export function activate(context: vscode.ExtensionContext) {
       const choice = await vscode.window.showQuickPick(
         [
           { label: "$(key) Set API Key", value: "setApiKey" },
+          { label: "$(trash) Clear API Key", value: "clearApiKey" },
           { label: "$(checklist) Select Models", value: "selectModels" },
           { label: "$(star-full) Enable All Subscription Models", value: "enableSubscription" },
           { label: "$(refresh) Refresh Available Models", value: "refresh" },
@@ -34,6 +35,9 @@ export function activate(context: vscode.ExtensionContext) {
         switch (choice.value) {
           case "setApiKey":
             await vscode.commands.executeCommand("nanogpt.setApiKey");
+            break;
+          case "clearApiKey":
+            await vscode.commands.executeCommand("nanogpt.clearApiKey");
             break;
           case "selectModels":
             await vscode.commands.executeCommand("nanogpt.selectModels");
@@ -70,8 +74,28 @@ export function activate(context: vscode.ExtensionContext) {
   );
 
   context.subscriptions.push(
+    vscode.commands.registerCommand("nanogpt.clearApiKey", async () => {
+      const confirm = await vscode.window.showWarningMessage(
+        "Are you sure you want to clear your NanoGPT API key?",
+        { modal: true },
+        "Clear"
+      );
+
+      if (confirm === "Clear") {
+        // Remove from Secret Storage
+        await context.secrets.delete("nanogpt.apiKey");
+        // Clear the setting (in case it exists)
+        const config = vscode.workspace.getConfiguration("nanogpt");
+        await config.update("apiKey", undefined, vscode.ConfigurationTarget.Global);
+        vscode.window.showInformationMessage("NanoGPT API key cleared!");
+        provider?.clearCache();
+      }
+    })
+  );
+
+  context.subscriptions.push(
     vscode.commands.registerCommand("nanogpt.selectModels", async () => {
-      const apiKey = await context.secrets.get("nanogpt.apiKey");
+      const apiKey = await provider?.getApiKey();
       if (!apiKey) {
         const setKey = await vscode.window.showWarningMessage(
           "Please set your NanoGPT API key first.",
@@ -163,7 +187,7 @@ export function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand("nanogpt.enableSubscriptionModels", async () => {
-      const apiKey = await context.secrets.get("nanogpt.apiKey");
+      const apiKey = await provider?.getApiKey();
       if (!apiKey) {
         const setKey = await vscode.window.showWarningMessage(
           "Please set your NanoGPT API key first.",
