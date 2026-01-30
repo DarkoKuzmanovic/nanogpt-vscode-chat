@@ -219,7 +219,7 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
       if (!this.migrationShown) {
         this.migrationShown = true;
         vscode.window.showInformationMessage(
-          "NanoGPT: API key has been migrated to Secure Storage for better security."
+          "NanoGPT: API key has been migrated to Secure Storage for better security.",
         );
       }
 
@@ -405,7 +405,7 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
 
   async provideLanguageModelChatInformation(
     options: { silent: boolean },
-    _token: vscode.CancellationToken
+    _token: vscode.CancellationToken,
   ): Promise<vscode.LanguageModelChatInformation[]> {
     const apiKey = await this.getApiKey();
 
@@ -414,7 +414,7 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
         const setKey = await vscode.window.showWarningMessage(
           "NanoGPT requires an API key. Get one at nano-gpt.com/api",
           "Set API Key",
-          "Get API Key"
+          "Get API Key",
         );
         if (setKey === "Set API Key") {
           await vscode.commands.executeCommand("nanogpt.setApiKey");
@@ -462,7 +462,7 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     options: vscode.ProvideLanguageModelChatResponseOptions,
     progress: vscode.Progress<vscode.LanguageModelResponsePart>,
-    token: vscode.CancellationToken
+    token: vscode.CancellationToken,
   ): Promise<void> {
     const apiKey = await this.getApiKey();
     if (!apiKey) {
@@ -545,7 +545,7 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
               for (const [, toolCall] of toolCallsInProgress) {
                 try {
                   progress.report(
-                    new vscode.LanguageModelToolCallPart(toolCall.id, toolCall.name, JSON.parse(toolCall.arguments))
+                    new vscode.LanguageModelToolCallPart(toolCall.id, toolCall.name, JSON.parse(toolCall.arguments)),
                   );
                 } catch {
                   // Arguments might not be valid JSON
@@ -611,7 +611,7 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
   async provideTokenCount(
     model: vscode.LanguageModelChatInformation,
     text: string | vscode.LanguageModelChatRequestMessage,
-    _token: vscode.CancellationToken
+    _token: vscode.CancellationToken,
   ): Promise<number> {
     // Simple estimation: ~4 characters per token on average
     const content = typeof text === "string" ? text : this.messageToString(text);
@@ -657,7 +657,7 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
   }
 
   private convertContent(
-    content: ReadonlyArray<vscode.LanguageModelInputPart | unknown>
+    content: ReadonlyArray<vscode.LanguageModelInputPart | unknown>,
   ): string | Array<{ type: string; text?: string; image_url?: { url: string } }> {
     const parts: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
     let hasNonText = false;

@@ -10,10 +10,7 @@ export function activate(context: vscode.ExtensionContext) {
   provider = new NanoGPTChatModelProvider(context);
 
   // Register the language model chat provider
-  const providerDisposable = vscode.lm.registerLanguageModelChatProvider(
-    "nanogpt",
-    provider
-  );
+  const providerDisposable = vscode.lm.registerLanguageModelChatProvider("nanogpt", provider);
   context.subscriptions.push(providerDisposable);
 
   // Register commands
@@ -28,7 +25,7 @@ export function activate(context: vscode.ExtensionContext) {
           { label: "$(refresh) Refresh Available Models", value: "refresh" },
           { label: "$(link-external) Get API Key from NanoGPT", value: "openSite" },
         ],
-        { placeHolder: "Manage NanoGPT Settings" }
+        { placeHolder: "Manage NanoGPT Settings" },
       );
 
       if (choice) {
@@ -53,7 +50,7 @@ export function activate(context: vscode.ExtensionContext) {
             break;
         }
       }
-    })
+    }),
   );
 
   context.subscriptions.push(
@@ -70,7 +67,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage("NanoGPT API key saved!");
         provider?.clearCache();
       }
-    })
+    }),
   );
 
   context.subscriptions.push(
@@ -78,7 +75,7 @@ export function activate(context: vscode.ExtensionContext) {
       const confirm = await vscode.window.showWarningMessage(
         "Are you sure you want to clear your NanoGPT API key?",
         { modal: true },
-        "Clear"
+        "Clear",
       );
 
       if (confirm === "Clear") {
@@ -90,17 +87,14 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage("NanoGPT API key cleared!");
         provider?.clearCache();
       }
-    })
+    }),
   );
 
   context.subscriptions.push(
     vscode.commands.registerCommand("nanogpt.selectModels", async () => {
       const apiKey = await provider?.getApiKey();
       if (!apiKey) {
-        const setKey = await vscode.window.showWarningMessage(
-          "Please set your NanoGPT API key first.",
-          "Set API Key"
-        );
+        const setKey = await vscode.window.showWarningMessage("Please set your NanoGPT API key first.", "Set API Key");
         if (setKey) {
           await vscode.commands.executeCommand("nanogpt.setApiKey");
         }
@@ -126,13 +120,11 @@ export function activate(context: vscode.ExtensionContext) {
 
             // Group models by family/provider
             const items = models.map((model) => {
-              const subscriptionBadge = (model as { isSubscription?: boolean }).isSubscription 
-                ? "$(star-full) " 
-                : "";
-              const pricingInfo = model.pricing 
+              const subscriptionBadge = (model as { isSubscription?: boolean }).isSubscription ? "$(star-full) " : "";
+              const pricingInfo = model.pricing
                 ? `$${model.pricing.input}/1M in | $${model.pricing.output}/1M out`
                 : "";
-              
+
               return {
                 label: `${subscriptionBadge}${model.name}`,
                 description: model.id,
@@ -142,7 +134,9 @@ export function activate(context: vscode.ExtensionContext) {
                   pricingInfo,
                   model.capabilities?.vision ? "🖼️ Vision" : "",
                   model.capabilities?.tools ? "🔧 Tools" : "",
-                ].filter(Boolean).join(" | "),
+                ]
+                  .filter(Boolean)
+                  .join(" | "),
                 picked: currentSelected.includes(model.id),
                 modelId: model.id,
               };
@@ -158,41 +152,32 @@ export function activate(context: vscode.ExtensionContext) {
 
             if (selected) {
               const selectedIds = selected.map((item) => item.modelId);
-              await config.update(
-                "selectedModels",
-                selectedIds,
-                vscode.ConfigurationTarget.Global
-              );
-              vscode.window.showInformationMessage(
-                `Selected ${selected.length} models for NanoGPT`
-              );
+              await config.update("selectedModels", selectedIds, vscode.ConfigurationTarget.Global);
+              vscode.window.showInformationMessage(`Selected ${selected.length} models for NanoGPT`);
               provider?.clearCache();
             }
-          }
+          },
         );
       } catch (error) {
         vscode.window.showErrorMessage(
-          `Failed to fetch models: ${error instanceof Error ? error.message : "Unknown error"}`
+          `Failed to fetch models: ${error instanceof Error ? error.message : "Unknown error"}`,
         );
       }
-    })
+    }),
   );
 
   context.subscriptions.push(
     vscode.commands.registerCommand("nanogpt.refreshModels", async () => {
       provider?.clearCache();
       vscode.window.showInformationMessage("NanoGPT model cache cleared!");
-    })
+    }),
   );
 
   context.subscriptions.push(
     vscode.commands.registerCommand("nanogpt.enableSubscriptionModels", async () => {
       const apiKey = await provider?.getApiKey();
       if (!apiKey) {
-        const setKey = await vscode.window.showWarningMessage(
-          "Please set your NanoGPT API key first.",
-          "Set API Key"
-        );
+        const setKey = await vscode.window.showWarningMessage("Please set your NanoGPT API key first.", "Set API Key");
         if (setKey) {
           await vscode.commands.executeCommand("nanogpt.setApiKey");
         }
@@ -214,38 +199,32 @@ export function activate(context: vscode.ExtensionContext) {
             }
 
             // Filter to subscription models only
-            const subscriptionModels = models.filter(
-              (m) => (m as { isSubscription?: boolean }).isSubscription
-            );
+            const subscriptionModels = models.filter((m) => (m as { isSubscription?: boolean }).isSubscription);
 
             if (subscriptionModels.length === 0) {
               vscode.window.showInformationMessage(
-                "No subscription models found. You may need a NanoGPT subscription."
+                "No subscription models found. You may need a NanoGPT subscription.",
               );
               return;
             }
 
             const config = vscode.workspace.getConfiguration("nanogpt");
             const subscriptionIds = subscriptionModels.map((m) => m.id);
-            
-            await config.update(
-              "selectedModels",
-              subscriptionIds,
-              vscode.ConfigurationTarget.Global
-            );
-            
+
+            await config.update("selectedModels", subscriptionIds, vscode.ConfigurationTarget.Global);
+
             vscode.window.showInformationMessage(
-              `Enabled ${subscriptionModels.length} subscription models for NanoGPT`
+              `Enabled ${subscriptionModels.length} subscription models for NanoGPT`,
             );
             provider?.clearCache();
-          }
+          },
         );
       } catch (error) {
         vscode.window.showErrorMessage(
-          `Failed to fetch models: ${error instanceof Error ? error.message : "Unknown error"}`
+          `Failed to fetch models: ${error instanceof Error ? error.message : "Unknown error"}`,
         );
       }
-    })
+    }),
   );
 }
 

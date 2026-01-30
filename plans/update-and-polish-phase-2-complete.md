@@ -3,11 +3,13 @@
 Implemented consistent, user-proof API key handling with automatic migration from settings to Secret Storage.
 
 **Files created/changed:**
+
 - src/provider.ts
 - src/extension.ts
 - package.json
 
 **Functions created/changed:**
+
 - `NanoGPTChatModelProvider.getApiKey()` (new) - centralized API key retrieval with migration
 - `fetchAvailableModels()` - updated to use `getApiKey()`
 - `provideLanguageModelChatInformation()` - updated to use `getApiKey()`
@@ -18,11 +20,13 @@ Implemented consistent, user-proof API key handling with automatic migration fro
 - `nanogpt.enableSubscriptionModels` command - updated to use `provider?.getApiKey()`
 
 **Tests created/changed:**
+
 - None (verified with `npm run compile`)
 
 **Review Status:** APPROVED
 
 **Git Commit Message:**
+
 ```
 feat: implement secure API key handling with automatic migration
 
