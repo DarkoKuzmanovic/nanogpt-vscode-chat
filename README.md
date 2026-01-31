@@ -10,6 +10,12 @@ Access DeepSeek V3.2, GLM 4.6, MiniMax M2, Kimi K2, Qwen 3 and hundreds more - a
 
 ---
 
+## ⚠️ Requirements
+
+> **Important:** Third-party language model providers (including NanoGPT) are currently **only available to users on individual GitHub Copilot plans** (Copilot Pro, Pro+). Business and Enterprise Copilot subscriptions do not support third-party model providers at this time. See [VS Code 1.104 release notes](https://code.visualstudio.com/updates/v1_104#_language-model-chat-provider-api) for details.
+
+---
+
 ## ⚡ Quick Start
 
 1. **Install the extension** from the VS Code Marketplace
@@ -114,6 +120,24 @@ Press **F5** to launch an Extension Development Host.
 | `npm run watch`   | Watch mode           |
 | `npm run lint`    | Run ESLint           |
 | `npm run format`  | Format with Prettier |
+
+---
+
+## ❓ Troubleshooting
+
+### Models not showing in "Pick Model"
+
+1. **Check your Copilot subscription** - Third-party providers only work with individual Copilot plans (Pro/Pro+), not Business/Enterprise
+2. **Verify API key is set** - Run command `NanoGPT: Set API Key`
+3. **Refresh models** - Run command `NanoGPT: Refresh Available Models`
+4. **Check the Output panel** - Select "NanoGPT" from the dropdown to see debug logs
+5. **Verify VS Code version** - Requires VS Code 1.104.0 or later
+
+### API errors
+
+- **401 Unauthorized** - Invalid API key, re-enter with `NanoGPT: Set API Key`
+- **403 Forbidden** - Your key may not have access to the selected model
+- **429 Rate Limited** - Wait a moment and try again
 
 ---
 

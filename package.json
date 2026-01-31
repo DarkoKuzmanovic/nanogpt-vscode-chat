@@ -60,6 +60,10 @@
       {
         "command": "nanogpt.enableSubscriptionModels",
         "title": "NanoGPT: Enable All Subscription Models"
+      },
+      {
+        "command": "nanogpt.diagnostics",
+        "title": "NanoGPT: Run Diagnostics"
       }
     ],
     "configuration": {

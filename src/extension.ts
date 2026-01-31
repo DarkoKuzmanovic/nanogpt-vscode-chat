@@ -11,11 +11,29 @@ export function activate(context: vscode.ExtensionContext) {
   outputChannel = vscode.window.createOutputChannel("NanoGPT");
   context.subscriptions.push(outputChannel);
 
+  // Log activation with VS Code version for debugging
+  const vscodeVersion = vscode.version;
+  outputChannel.appendLine(`[Activation] NanoGPT extension activating on VS Code ${vscodeVersion}`);
+  outputChannel.appendLine(`[Activation] Extension ID: ${context.extension.id}`);
+  outputChannel.appendLine(`[Activation] Extension Path: ${context.extensionPath}`);
+
   // Create the provider
   provider = new NanoGPTChatModelProvider(context, outputChannel);
 
-  // Register the language model chat provider
-  const providerDisposable = vscode.lm.registerLanguageModelChatProvider("nanogpt", provider);
+  // Register the language model chat provider with detailed logging
+  outputChannel.appendLine("[Activation] Registering language model chat provider with vendor: 'nanogpt'");
+
+  let providerDisposable: vscode.Disposable;
+  try {
+    providerDisposable = vscode.lm.registerLanguageModelChatProvider("nanogpt", provider);
+    outputChannel.appendLine("[Activation] ✓ Provider registration returned successfully");
+    outputChannel.appendLine(`[Activation] Provider disposable: ${providerDisposable ? "valid" : "null/undefined"}`);
+  } catch (error) {
+    outputChannel.appendLine(
+      `[Activation] ✗ Provider registration failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+    throw error;
+  }
   context.subscriptions.push(providerDisposable);
 
   // Auto-fetch models on startup if enabled
@@ -166,9 +184,13 @@ export function activate(context: vscode.ExtensionContext) {
 
             if (selected) {
               const selectedIds = selected.map((item) => item.modelId);
+              outputChannel.appendLine(`[SelectModels] About to update config with ${selectedIds.length} models: ${JSON.stringify(selectedIds)}`);
               await config.update("selectedModels", selectedIds, vscode.ConfigurationTarget.Global);
+              outputChannel.appendLine(`[SelectModels] Config updated successfully`);
               vscode.window.showInformationMessage(`Selected ${selected.length} models for NanoGPT`);
+              outputChannel.appendLine(`[SelectModels] About to call clearCache()`);
               provider?.clearCache();
+              outputChannel.appendLine(`[SelectModels] clearCache() returned`);
             }
           },
         );
@@ -268,6 +290,85 @@ export function activate(context: vscode.ExtensionContext) {
       }
     }),
   );
+
+  // Diagnostic command to check registered language models
+  context.subscriptions.push(
+    vscode.commands.registerCommand("nanogpt.diagnostics", async () => {
+      outputChannel.show();
+      outputChannel.appendLine("");
+      outputChannel.appendLine("=".repeat(60));
+      outputChannel.appendLine("[Diagnostics] Running NanoGPT diagnostics...");
+      outputChannel.appendLine(`[Diagnostics] VS Code version: ${vscode.version}`);
+      outputChannel.appendLine(`[Diagnostics] Extension version: ${context.extension.packageJSON.version}`);
+
+      // Check API key
+      const apiKey = await provider?.getApiKey();
+      outputChannel.appendLine(`[Diagnostics] API key configured: ${apiKey ? "Yes" : "No"}`);
+
+      // Check configuration
+      const config = vscode.workspace.getConfiguration("nanogpt");
+      const selectedModels = config.get<string[]>("selectedModels", []);
+      outputChannel.appendLine(`[Diagnostics] Selected models in config: ${selectedModels.length}`);
+      selectedModels.forEach((m) => outputChannel.appendLine(`[Diagnostics]   - ${m}`));
+
+      // Check language models visible to VS Code using selectChatModels API
+      outputChannel.appendLine("[Diagnostics] Querying vscode.lm.selectChatModels({})...");
+      try {
+        const allModels: vscode.LanguageModelChat[] = await vscode.lm.selectChatModels({});
+        outputChannel.appendLine(`[Diagnostics] Total language models in VS Code: ${allModels.length}`);
+
+        // Find NanoGPT models
+        const nanoModels = allModels.filter(
+          (m: vscode.LanguageModelChat) => m.vendor === "nanogpt" || m.id.includes("nanogpt"),
+        );
+        outputChannel.appendLine(`[Diagnostics] NanoGPT models found: ${nanoModels.length}`);
+
+        if (nanoModels.length > 0) {
+          nanoModels.forEach((m: vscode.LanguageModelChat) => {
+            outputChannel.appendLine(`[Diagnostics]   ✓ ${m.name} (${m.id}) - vendor: ${m.vendor}`);
+          });
+        } else {
+          outputChannel.appendLine("[Diagnostics]   ✗ No NanoGPT models visible to VS Code!");
+          outputChannel.appendLine("[Diagnostics]   This suggests the provider is not being recognized.");
+        }
+
+        // List all vendors for reference
+        const vendors = [...new Set(allModels.map((m: vscode.LanguageModelChat) => m.vendor))];
+        outputChannel.appendLine(`[Diagnostics] All vendors: ${vendors.join(", ")}`);
+
+        // Log all models for debugging
+        outputChannel.appendLine("[Diagnostics] All registered models:");
+        allModels.forEach((m: vscode.LanguageModelChat) => {
+          outputChannel.appendLine(`[Diagnostics]   - ${m.name} (vendor: ${m.vendor}, id: ${m.id})`);
+        });
+
+        outputChannel.appendLine("=".repeat(60));
+        outputChannel.appendLine("");
+
+        if (nanoModels.length > 0) {
+          outputChannel.appendLine("[Diagnostics] ✓ NanoGPT models ARE registered in VS Code's language model system.");
+          outputChannel.appendLine("[Diagnostics] If models don't appear in Copilot Chat 'Pick a model' menu:");
+          outputChannel.appendLine("[Diagnostics]   1. Try: Command Palette → 'Chat: Manage Language Models'");
+          outputChannel.appendLine("[Diagnostics]   2. Enable visibility (eye icon) for NanoGPT models");
+          outputChannel.appendLine(
+            "[Diagnostics]   3. If no Language Models command exists, this may be a VS Code limitation",
+          );
+          outputChannel.appendLine("");
+        }
+
+        vscode.window.showInformationMessage(
+          `Diagnostics complete. Found ${nanoModels.length} NanoGPT models out of ${allModels.length} total. Check Output panel for details.`,
+        );
+      } catch (err) {
+        outputChannel.appendLine(`[Diagnostics] Error querying models: ${err}`);
+        outputChannel.appendLine("=".repeat(60));
+        outputChannel.appendLine("");
+        vscode.window.showErrorMessage(`Diagnostics error: ${err}`);
+      }
+    }),
+  );
+
+  outputChannel.appendLine("[Activation] NanoGPT extension activation complete");
 }
 
 export function deactivate() {

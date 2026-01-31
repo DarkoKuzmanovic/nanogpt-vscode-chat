@@ -191,6 +191,10 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
   private migrationShown: boolean = false;
   private modelsFetchPromise?: Promise<NanoGPTModel[]>;
 
+  // Event emitter to notify VS Code when available models change
+  private readonly _onDidChangeLanguageModelChatInformation = new vscode.EventEmitter<void>();
+  public readonly onDidChangeLanguageModelChatInformation = this._onDidChangeLanguageModelChatInformation.event;
+
   constructor(context: vscode.ExtensionContext, outputChannel: vscode.OutputChannel) {
     this.context = context;
     this.outputChannel = outputChannel;
@@ -233,21 +237,36 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
   }
 
   clearCache(): void {
+    const timestamp = new Date().toISOString();
+    this.outputChannel.appendLine(`[clearCache] Called at ${timestamp}`);
     this.cachedModels = undefined;
     this.modelCache.clear();
     this.lastFetch = 0;
+    // Notify VS Code that models may have changed
+    this.outputChannel.appendLine(`[clearCache] About to fire onDidChangeLanguageModelChatInformation event`);
+    this._onDidChangeLanguageModelChatInformation.fire();
+    this.outputChannel.appendLine(`[clearCache] Event fired successfully`);
   }
 
   async fetchAvailableModels(): Promise<NanoGPTModel[]> {
+    const fetchTime = new Date().toISOString();
+    this.outputChannel.appendLine(`[fetchAvailableModels] Called at ${fetchTime}`);
+    this.outputChannel.appendLine(`[fetchAvailableModels] cachedModels: ${this.cachedModels ? "exists (" + this.cachedModels.length + " models)" : "undefined"}`);
+    this.outputChannel.appendLine(`[fetchAvailableModels] lastFetch: ${this.lastFetch}, cacheDuration: ${this.CACHE_DURATION}, age: ${Date.now() - this.lastFetch}ms`);
+
     // Return cached models if still valid
     if (this.cachedModels && Date.now() - this.lastFetch < this.CACHE_DURATION) {
+      this.outputChannel.appendLine(`[fetchAvailableModels] Returning cached models (${this.cachedModels.length} models)`);
       return this.cachedModels;
     }
 
     // In-flight de-duplication: if a fetch is already in progress, return that promise
     if (this.modelsFetchPromise) {
+      this.outputChannel.appendLine(`[fetchAvailableModels] Returning in-flight fetch promise`);
       return this.modelsFetchPromise;
     }
+
+    this.outputChannel.appendLine(`[fetchAvailableModels] Starting new API fetch`);
 
     const apiKey = await this.getApiKey();
     const config = vscode.workspace.getConfiguration("nanogpt");
@@ -291,6 +310,10 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
 
         this.cachedModels = allModels.length > 0 ? allModels : DEFAULT_MODELS;
         this.lastFetch = Date.now();
+        // Notify VS Code that models have been updated
+        this.outputChannel.appendLine(`[fetchAvailableModels] About to fire onDidChangeLanguageModelChatInformation event`);
+        this._onDidChangeLanguageModelChatInformation.fire();
+        this.outputChannel.appendLine(`[fetchAvailableModels] Fetched ${this.cachedModels.length} models, event fired`);
         return this.cachedModels;
       } catch (error) {
         this.outputChannel.appendLine(
@@ -433,27 +456,11 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
       .join(" ");
   }
 
-  async provideLanguageModelChatInformation(
-    options: { silent: boolean },
+  provideLanguageModelChatInformation(
+    _options: { silent: boolean },
     _token: vscode.CancellationToken,
-  ): Promise<vscode.LanguageModelChatInformation[]> {
-    const apiKey = await this.getApiKey();
-
-    if (!apiKey) {
-      if (!options.silent) {
-        const setKey = await vscode.window.showWarningMessage(
-          "NanoGPT requires an API key. Get one at nano-gpt.com/api",
-          "Set API Key",
-          "Get API Key",
-        );
-        if (setKey === "Set API Key") {
-          await vscode.commands.executeCommand("nanogpt.setApiKey");
-        } else if (setKey === "Get API Key") {
-          vscode.env.openExternal(vscode.Uri.parse("https://nano-gpt.com/api"));
-        }
-      }
-      return [];
-    }
+  ): vscode.LanguageModelChatInformation[] {
+    this.outputChannel.appendLine(`[provideLanguageModelChatInformation] Called at ${new Date().toISOString()}, silent=${_options.silent}`);
 
     const config = vscode.workspace.getConfiguration("nanogpt");
     const selectedModelIds = config.get<string[]>("selectedModels", [
@@ -463,24 +470,16 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
       "moonshotai/kimi-k2-thinking",
     ]);
 
-    const allModels = await this.fetchAvailableModels();
-
-    // Debug: log available model IDs vs selected
-    this.outputChannel.appendLine(`[Debug] Selected model IDs from config: ${JSON.stringify(selectedModelIds)}`);
-    this.outputChannel.appendLine(`[Debug] Available model IDs from API: ${allModels.map((m) => m.id).join(", ")}`);
-
-    const selectedModels = allModels.filter((m) => selectedModelIds.includes(m.id));
-
-    this.outputChannel.appendLine(`[Debug] Matched models: ${selectedModels.map((m) => m.id).join(", ") || "NONE"}`);
-
-    // If no selected models match, use defaults
+    // Use cached models if available, otherwise fall back to defaults
+    const source = this.cachedModels || DEFAULT_MODELS;
+    const selectedModels = source.filter((m) => selectedModelIds.includes(m.id));
     const modelsToUse = selectedModels.length > 0 ? selectedModels : DEFAULT_MODELS.slice(0, 4);
 
     this.outputChannel.appendLine(
-      `[Debug] Registering ${modelsToUse.length} models: ${modelsToUse.map((m) => `${m.name} (${m.id})`).join(", ")}`,
+      `[provideLanguageModelChatInformation] Returning ${modelsToUse.length} models (source: ${this.cachedModels ? "cache" : "defaults"}): ${modelsToUse.map((m) => m.id).join(", ")}`,
     );
 
-    return modelsToUse.map((model) => {
+    const result = modelsToUse.map((model) => {
       const info: vscode.LanguageModelChatInformation = {
         id: model.id,
         name: model.name,
@@ -492,11 +491,19 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
           imageInput: model.capabilities?.vision || false,
           toolCalling: model.capabilities?.tools ?? true,
         },
-        detail: this.formatModelDetail(model),
       };
       this.modelCache.set(model.id, info);
       return info;
     });
+
+    // If cache is stale or missing, trigger a background fetch.
+    // When it completes, onDidChangeLanguageModelChatInformation fires
+    // and VS Code re-calls this method with fresh cached data.
+    if (!this.cachedModels || Date.now() - this.lastFetch >= this.CACHE_DURATION) {
+      this.fetchAvailableModels().catch(() => {});
+    }
+
+    return result;
   }
 
   async provideLanguageModelChatResponse(
@@ -666,8 +673,6 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
         }
       }
     } catch (error) {
-      clearTimeout(timeoutId);
-
       if (error instanceof Error && error.name === "AbortError") {
         if (token.isCancellationRequested) {
           return; // User cancelled
@@ -687,6 +692,8 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
       }
 
       throw new Error(message);
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
@@ -753,6 +760,7 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
     for (const part of msg.content) {
       if (part instanceof vscode.LanguageModelToolResultPart) {
         result.tool_call_id = part.callId;
+        result.role = "tool";
         break; // Only one tool_call_id per message
       }
     }
@@ -793,8 +801,10 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
       if (part instanceof vscode.LanguageModelTextPart) {
         parts.push({ type: "text", text: part.value });
       } else if (part instanceof vscode.LanguageModelToolResultPart) {
-        // Tool results go as text
-        const resultContent = typeof part.content === "string" ? part.content : JSON.stringify(part.content);
+        // Tool results go as text - extract text from the content array
+        const resultContent = part.content
+          .map((item: unknown) => (item instanceof vscode.LanguageModelTextPart ? item.value : typeof item === "string" ? item : JSON.stringify(item)))
+          .join("");
         parts.push({ type: "text", text: resultContent });
       } else if (this.isImagePart(part)) {
         hasNonText = true;
@@ -837,28 +847,4 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
       .join("");
   }
 
-  private formatModelDetail(model: NanoGPTModel): string {
-    const parts: string[] = [];
-
-    if (model.isSubscription) {
-      parts.push("⭐ Subscription");
-    }
-
-    if (model.maxInputTokens) {
-      parts.push(`${Math.round(model.maxInputTokens / 1000)}K context`);
-    }
-
-    const features: string[] = [];
-    if (model.capabilities?.vision) {
-      features.push("🖼️ Vision");
-    }
-    if (model.capabilities?.tools) {
-      features.push("🔧 Tools");
-    }
-    if (features.length > 0) {
-      parts.push(features.join(" "));
-    }
-
-    return parts.join(" | ");
-  }
 }

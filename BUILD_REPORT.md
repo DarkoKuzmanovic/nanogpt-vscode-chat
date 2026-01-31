@@ -1,12 +1,13 @@
 # 🚀 NanoGPT VS Code Extension - Build Complete
 
-**Build Date:** January 31, 2026  
-**Version:** 0.1.2  
+**Build Date:** January 31, 2026
+**Version:** 0.1.2
 **Status:** ✅ Ready for Installation/Publishing
 
 ## Build Artifacts
 
 **VSIX Package:** `nanogpt-vscode-chat-0.1.2.vsix`
+
 - **Size:** 40 KB
 - **Type:** ZIP archive
 - **Location:** `/home/quzma/source/nanogpt-vscode-chat/nanogpt-vscode-chat-0.1.2.vsix`
@@ -38,12 +39,14 @@ All compilation successful with no errors or warnings.
 ## Installation Options
 
 ### Option 1: Local Testing (Extension Development Host)
+
 ```bash
 # In VS Code, press F5 to launch Extension Development Host
 # The extension will load from the source directory
 ```
 
 ### Option 2: Manual Installation (Local VSIX)
+
 ```bash
 # Install from VSIX file in VS Code
 1. Open VS Code
@@ -53,6 +56,7 @@ All compilation successful with no errors or warnings.
 ```
 
 ### Option 3: Publish to VS Code Marketplace
+
 ```bash
 # Requires publisher account (quzma)
 vsce publish
@@ -88,6 +92,7 @@ vsce publish
 ## Next Steps
 
 ### Testing
+
 1. Install the VSIX locally
 2. Test API key setup and migration
 3. Verify model selection works
@@ -96,11 +101,13 @@ vsce publish
 6. Verify settings are respected
 
 ### Publishing
+
 1. Ensure publisher account is verified
 2. Run `vsce publish` when ready
 3. Extension will appear in VS Code Marketplace
 
 ### Long-term
+
 - Monitor user feedback
 - Plan for feature additions
 - Consider unit test coverage
