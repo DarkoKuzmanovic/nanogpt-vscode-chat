@@ -464,10 +464,21 @@ export class NanoGPTChatModelProvider implements vscode.LanguageModelChatProvide
     ]);
 
     const allModels = await this.fetchAvailableModels();
+
+    // Debug: log available model IDs vs selected
+    this.outputChannel.appendLine(`[Debug] Selected model IDs from config: ${JSON.stringify(selectedModelIds)}`);
+    this.outputChannel.appendLine(`[Debug] Available model IDs from API: ${allModels.map((m) => m.id).join(", ")}`);
+
     const selectedModels = allModels.filter((m) => selectedModelIds.includes(m.id));
+
+    this.outputChannel.appendLine(`[Debug] Matched models: ${selectedModels.map((m) => m.id).join(", ") || "NONE"}`);
 
     // If no selected models match, use defaults
     const modelsToUse = selectedModels.length > 0 ? selectedModels : DEFAULT_MODELS.slice(0, 4);
+
+    this.outputChannel.appendLine(
+      `[Debug] Registering ${modelsToUse.length} models: ${modelsToUse.map((m) => `${m.name} (${m.id})`).join(", ")}`,
+    );
 
     return modelsToUse.map((model) => {
       const info: vscode.LanguageModelChatInformation = {
